@@ -1,9 +1,9 @@
 import os
-
 import numpy as np
 from NiftyHandler import NiftyHandler
-from scipy.ndimage import label, binary_erosion, binary_closing, binary_dilation, binary_opening, \
-    generate_binary_structure, find_objects
+from scipy.ndimage import label, binary_closing, binary_opening, \
+    generate_binary_structure
+from SpineSegmentation import SpineSegmentation
 
 
 class DifficultBodySegmentation:
@@ -140,33 +140,39 @@ class DifficultBodySegmentation:
         return bb, cc
 
 
-def get_skeleton_segmentation(ct_scan_path):
-    """
-    global entry function for part 1 of the exercise
-    @param ct_scan_path:
-    @return:
-    """
+class MergedROI:
+    @staticmethod
+    def merged_roi(ct_scan_path: str, anchor_segmentation_path: str, anchor_coordintes: tuple[int]):
+        """
+        global entry function for part 1 of the exercise
+        @param ct_scan_path:
+        @return:
+        """
 
-    output_dir = "skeleton_segmentation_output"
-    scan_basename = os.path.basename(ct_scan_path).split('.')[0]
-    if not os.path.isdir(output_dir):
-        os.mkdir(output_dir)
-    data, orientation = NiftyHandler.read(ct_scan_path)
-    dss = DifficultBodySegmentation()
-    body_segmentation = dss.isolate_body(data)
-    body_segmentation_path = os.path.join(output_dir, f"{scan_basename}_body_segmentation.nii.gz")
-    NiftyHandler.write(body_segmentation, body_segmentation_path, orientation)
+        output_dir = "3d_band_output"
+        scan_basename = os.path.basename(ct_scan_path).split('.')[0]
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+        data, orientation = NiftyHandler.read(ct_scan_path)
+        dss = DifficultBodySegmentation()
+        body_segmentation = dss.isolate_body(data)
+        body_segmentation_path = os.path.join(output_dir, f"{scan_basename}_body_segmentation.nii.gz")
+        NiftyHandler.write(body_segmentation, body_segmentation_path, orientation)
 
-    bb, cc = dss.isolate_bs(body_segmentation)
-    body_lung_band = dss.three_d_band(body_segmentation, bb, cc)
-    lungs_segmentation_path = os.path.join(output_dir, f"{scan_basename}_lungs_segmentation.nii.gz")
-    NiftyHandler.write(body_lung_band, lungs_segmentation_path, orientation)
+        bb, cc = dss.isolate_bs(body_segmentation)
+        body_lung_band = dss.three_d_band(body_segmentation, bb, cc)
+        lungs_segmentation_path = os.path.join(output_dir, f"{scan_basename}_lungs_segmentation.nii.gz")
+        NiftyHandler.write(body_lung_band, lungs_segmentation_path, orientation)
+
+        spine_segmentation = SpineSegmentation(ct_scan_path, anchor_segmentation_path, anchor_coordintes).getSpineSegmentation()
+
+
 
 
 def main():
 
     ct_scan_path = "/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case1_CT.nii.gz"
-    get_skeleton_segmentation(ct_scan_path)
+    merged_roi(ct_scan_path)
 
 
 if __name__ == '__main__':
