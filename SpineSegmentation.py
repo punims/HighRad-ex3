@@ -32,13 +32,11 @@ class SpineSegmentation:
         -------
 
         """
-        ct_data, ct_orientation = NiftyHandler.read(self.ct_nifti)
         anchor_data, anchor_orientation = NiftyHandler.read(self.anchor_segmentation_nifti)
         imin_value = 248
         skeleton_data = self.skeletonSegmentor.skeletonSegmentation(imin_value)
         roi = self.__spine_crop(skeleton_data, anchor_data)
         clean_spine = self.__refine_spine(roi)
-        NiftyHandler.write(clean_spine, "spine_crop", ct_orientation)
         return clean_spine
 
 
@@ -87,7 +85,7 @@ class SpineSegmentation:
         medium_structuring_element = generate_binary_structure(3, 2)
         closed_holes = binary_closing(largest_component, medium_structuring_element, iterations=2)
 
-        return closed_holes.astype(float)
+        return (closed_holes > 0).astype(float)
 
 
 

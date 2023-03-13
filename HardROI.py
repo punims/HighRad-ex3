@@ -2,8 +2,8 @@ import os
 import numpy as np
 from NiftyHandler import NiftyHandler
 from scipy.ndimage import label, binary_closing, binary_opening, \
-    generate_binary_structure, binary_fill_holes
-from scipy.spatial import ConvexHull
+    generate_binary_structure, binary_erosion
+from scipy.spatial import ConvexHull, Delaunay
 from SpineSegmentation import SpineSegmentation
 
 
@@ -44,7 +44,6 @@ class DifficultBodySegmentation:
         # idea:
         lungs_segmentation = self.__isolate_lungs(body_segmentation)
         bb, cc = self.__find_bb_and_cc(lungs_segmentation)
-        print(f"bb: {bb} cc: {cc}")
         return lungs_segmentation, bb, cc
 
 
@@ -87,17 +86,11 @@ class DifficultBodySegmentation:
         @return:
         """
 
-        non_zero_voxels = np.transpose(np.nonzero(lungs_segmentation))
-        lungs_convex_hull = ConvexHull(non_zero_voxels)
-        hull_vertices = lungs_convex_hull.vertices
+        # get filled convex hull of lungs and get whatever is between the body and the convex hull
+        lungs_convex_hull, _ = self.__flood_fill_hull(lungs_segmentation)
+        body_without_hull = (~(lungs_convex_hull > 0) & (body_segmentation > 0)).astype(float)
 
-        # Create a new binary image with the convex hull voxels set to 1
-        hull_image = np.zeros_like(lungs_segmentation)
-        hull_image[tuple(non_zero_voxels[hull_vertices].T)] = 1
-        hull_image = binary_fill_holes(hull_image)
-        hull_image = (hull_image > 0).astype(float)
-        return hull_image
-        body_without_hull = ((body_segmentation > 0) & hull_image).astype(int)
+        # get the cut between bb and cc
         body_band = np.zeros(body_without_hull.shape)
         body_band[:, :, bb:cc] = body_without_hull[:, :, bb: cc]
         return body_band
@@ -151,6 +144,26 @@ class DifficultBodySegmentation:
 
         return bb, cc
 
+    def __flood_fill_hull(self, image: np.ndarray) -> tuple[np.ndarray, ConvexHull]:
+        """
+        Gets convex hull of a binary image and fills it.
+        Parameters
+        ----------
+        image: binary image
+
+        Returns: filled convex hull and the hull object
+        -------
+
+        """
+        points = np.transpose(np.where(image))
+        hull = ConvexHull(points)
+        deln = Delaunay(points[hull.vertices])
+        idx = np.stack(np.indices(image.shape), axis=-1)
+        out_idx = np.nonzero(deln.find_simplex(idx) + 1)
+        out_img = np.zeros(image.shape)
+        out_img[out_idx] = 1
+        return out_img, hull
+
 
 class MergedROI:
     @classmethod
@@ -172,9 +185,9 @@ class MergedROI:
         NiftyHandler.write(body_segmentation, body_segmentation_path, orientation)
 
         lungs_segmentation, bb, cc = dss.isolate_bs(body_segmentation)
-        body_lung_band = dss.three_d_band(body_segmentation, lungs_segmentation, bb, cc)
         lungs_segmentation_path = os.path.join(output_dir, f"{scan_basename}_lungs_segmentation.nii.gz")
-        NiftyHandler.write(body_lung_band, lungs_segmentation_path, orientation)
+        NiftyHandler.write(lungs_segmentation, lungs_segmentation_path, orientation)
+        body_lung_band = dss.three_d_band(body_segmentation, lungs_segmentation, bb, cc)
 
         spine_segmentation = SpineSegmentation(ct_scan_path, anchor_segmentation_path, anchor_coordintes).getSpineSegmentation()
         merged_segmentation = cls.__merge_band_and_spine(body_lung_band, spine_segmentation)
@@ -199,7 +212,7 @@ class MergedROI:
         sliced_spine = np.zeros(spine_segmentation.shape)
         sliced_spine[:, :, band_slices] = spine_segmentation[:, :, band_slices]
         boxed_spine = MergedROI.draw_bounding_box_3d(sliced_spine)
-        band_and_spine = (band_3d.astype(int) | boxed_spine.astype(int)).astype(float)
+        band_and_spine = ((band_3d > 0).astype(int) | (boxed_spine > 0).astype(int)).astype(float)
         return band_and_spine
 
 
@@ -236,8 +249,9 @@ if __name__ == '__main__':
     Update ct_scan_path, anchor_path and coordinates before running
     """
 
-    i = 1
-    ct_scan_path = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_CT.nii.gz"
-    aorta_nifti = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_Aorta.nii.gz"
-    coordinates = (-80, 50, -70, 100)
-    MergedROI.merged_roi(ct_scan_path, aorta_nifti, coordinates)
+    for i in range(2, 5):
+        print(f"Working on scan {i}")
+        ct_scan_path = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_CT.nii.gz"
+        aorta_nifti = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_Aorta.nii.gz"
+        coordinates = (-80, 50, -70, 100)
+        MergedROI.merged_roi(ct_scan_path, aorta_nifti, coordinates)
