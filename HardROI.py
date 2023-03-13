@@ -2,7 +2,7 @@ import os
 import numpy as np
 from NiftyHandler import NiftyHandler
 from scipy.ndimage import label, binary_closing, binary_opening, \
-    generate_binary_structure, binary_erosion
+    generate_binary_structure, binary_erosion, binary_fill_holes, binary_dilation, iterate_structure
 from scipy.spatial import ConvexHull, Delaunay
 from SpineSegmentation import SpineSegmentation
 
@@ -11,6 +11,9 @@ class DifficultBodySegmentation:
     """
     Class responsible for a more difficult segmentation of parts of the skeleton
     """
+
+    def __init__(self, orientation):
+        self.orientation = orientation
 
     def isolate_body(self, ct_scan: np.ndarray) -> np.ndarray:
         """
@@ -55,21 +58,32 @@ class DifficultBodySegmentation:
         @return:
         """
 
-        inverted_img = np.logical_not(body_segmentation)
+        # fill large holes (lungs) which gets us the full body
+        structuring_element = iterate_structure(generate_binary_structure(3, 3), iterations=2)
+        full_body = binary_dilation(body_segmentation, structuring_element, iterations=20)
+        full_body = binary_erosion(full_body, structuring_element, iterations=20) > 0
 
-        # slightly open the scan so that it doesn't connect to the air outside the body
+        # with the full body we can get the air in the background
+        air = ~full_body
+        body_and_background_segmentation = (body_segmentation > 0) | air
+
+
+        # invert to get all air in the body, largest connected components should be the lungs
+        inverted_img = np.logical_not(body_and_background_segmentation)
+
+        # slightly open the scan so that it doesn't connect to the lungs
         rank = 3
         connectivity = 3
         structuring_element = generate_binary_structure(rank, connectivity)
         x = inverted_img
-        inverted_img = binary_opening(x, structuring_element, iterations=3)
+        inverted_img = binary_opening(x, structuring_element, iterations=7)
         labeled_img, num_features = label(inverted_img)
         sizes = np.bincount(labeled_img.ravel())
 
 
         sorted_cc = np.argsort(sizes)[::-1]
-        # lungs should be the top 3 and 4 because of the body and outside the body
-        lung_labels = sorted_cc[2:4]
+        # lungs should be the top 2 and 3. 1 is always the entire image
+        lung_labels = sorted_cc[1:3]
         lung1 = (labeled_img == lung_labels[0]).astype(int)
         lung2 = (labeled_img == lung_labels[1]).astype(int)
         return (lung1 | lung2).astype(float)
@@ -110,6 +124,8 @@ class DifficultBodySegmentation:
         x = binary_opening(x, structuring_element, iterations=2)
         x = binary_closing(x, structuring_element)
         return x
+
+
 
 
     def __compute_largest_connected_component(self, denoised_ct):
@@ -158,7 +174,7 @@ class DifficultBodySegmentation:
         points = np.transpose(np.where(image))
         hull = ConvexHull(points)
         deln = Delaunay(points[hull.vertices])
-        idx = np.stack(np.indices(image.shape), axis=-1)
+        idx = np.stack(np.indices(image.shape).astype('int16'), axis=-1)
         out_idx = np.nonzero(deln.find_simplex(idx) + 1)
         out_img = np.zeros(image.shape)
         out_img[out_idx] = 1
@@ -179,7 +195,7 @@ class MergedROI:
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
         data, orientation = NiftyHandler.read(ct_scan_path)
-        dss = DifficultBodySegmentation()
+        dss = DifficultBodySegmentation(orientation)
         body_segmentation = dss.isolate_body(data)
         body_segmentation_path = os.path.join(output_dir, f"{scan_basename}_body_segmentation.nii.gz")
         NiftyHandler.write(body_segmentation, body_segmentation_path, orientation)
@@ -249,7 +265,7 @@ if __name__ == '__main__':
     Update ct_scan_path, anchor_path and coordinates before running
     """
 
-    for i in range(2, 5):
+    for i in range(1, 5):
         print(f"Working on scan {i}")
         ct_scan_path = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_CT.nii.gz"
         aorta_nifti = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_Aorta.nii.gz"
