@@ -37,6 +37,7 @@ class MSRG:
         """
 
         # slice in axial planes to reduce runtime slightly.
+        original_shape = ct_data.shape
         if self.axial_boundary is not None:
             bottom, top = self.axial_boundary
             ct_data = ct_data[:, :, bottom:top]
@@ -52,7 +53,8 @@ class MSRG:
 
         # return to normal
         if self.axial_boundary is not None:
-            temp_segmentation = np.zeros(ct_data.shape)
+            temp_segmentation = np.zeros(original_shape)
+            bottom, top = self.axial_boundary
             temp_segmentation[:, :, bottom:top] = segmentation
             segmentation = temp_segmentation
         return segmentation.astype(float)
@@ -137,7 +139,7 @@ class MSRG:
 
         return segmentation
 
-    def __msrg_with_roi(self, ct_scan: np.ndarray, roi: np.ndarray, threshold: float = 10, iterations: int = 100):
+    def __msrg_with_roi(self, ct_scan: np.ndarray, roi: np.ndarray, threshold: float = 10, iterations: int = 125):
         """
         Assuming the entire ROI is nearly contained within the confines of the liver
         1. preprocess the ROI a bit to get rid of outlier voxels
@@ -173,6 +175,8 @@ class MSRG:
             cur_average = np.mean(ct_scan[segmentation])
             neighbors_to_add = np.logical_and(neighbors, np.abs(ct_scan - cur_average) <= threshold)
             segmentation = np.logical_or(neighbors_to_add, segmentation)
+
+            # TODO check if binary closing is helpful here.
             segmentation = binary_closing(segmentation, generate_binary_structure(3, 1))
             cur_size = np.sum(segmentation)
             i += 1
@@ -202,8 +206,8 @@ class MSRG:
         # x = binary_opening(x, structure_element)
 
         # find largest connected component and return it.
-        # x, num_components = label(x)
-        # x = x == np.argmax(np.bincount(x.flat)[1:]) + 1
+        x, num_components = label(x)
+        x = x == np.argmax(np.bincount(x.flat)[1:]) + 1
         x = x.astype(float)
         return x
 
@@ -217,10 +221,10 @@ def script_run():
     """
 
     seed_size = 200
-    msrg = MSRG(seed_size)
+    msrg = MSRG(seed_size, (125, 290))
     liver_segmentation_path = "liver_segmentation_1"
     refined_liver_segmentation_path = "liver_segmentation_1_refined"
-    refine = False
+    refine = True
 
     if refine:
         liver_segmentation_data, liver_orientation = NiftyHandler.read(liver_segmentation_path)

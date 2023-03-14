@@ -35,7 +35,7 @@ class LiverSegmentation:
         ct_data, orientation = NiftyHandler.read(ct_scan_path)
         body_segmentor = DifficultBodySegmentation(orientation)
         body_segmentation = body_segmentor.isolate_body(ct_data)
-        _, upper_slice, _ = body_segmentor.isolate_bs(body_segmentation)
+        _, _, upper_slice = body_segmentor.isolate_bs(body_segmentation)
 
         # get liver roi seed
         liver_roi = LiverROI(self.liver_coordinates, "1")
