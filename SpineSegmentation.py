@@ -1,7 +1,7 @@
 import numpy as np
 from NiftyHandler import NiftyHandler
 from SkeletonSegmentation import SkeletonSegmentation
-from scipy.ndimage import label, binary_opening, generate_binary_structure, median_filter, binary_closing
+from scipy.ndimage import label, generate_binary_structure, binary_closing
 
 
 class SpineSegmentation:

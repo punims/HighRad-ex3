@@ -2,7 +2,7 @@ import os
 import numpy as np
 from NiftyHandler import NiftyHandler
 from scipy.ndimage import label, binary_closing, binary_opening, \
-    generate_binary_structure, binary_erosion, binary_fill_holes, binary_dilation, iterate_structure
+    generate_binary_structure, binary_erosion, binary_dilation, iterate_structure
 from scipy.spatial import ConvexHull, Delaunay
 from SpineSegmentation import SpineSegmentation
 
