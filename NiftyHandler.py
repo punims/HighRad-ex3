@@ -2,6 +2,8 @@ import os
 import nibabel as nib
 from nibabel.orientations import io_orientation, axcodes2ornt, ornt_transform
 import numpy as np
+
+
 class NiftyHandler:
     """
     Class responsible for the reading and writing of nifti files.

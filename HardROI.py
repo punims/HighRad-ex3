@@ -33,7 +33,7 @@ class DifficultBodySegmentation:
         body_segmentation = self.__compute_largest_connected_component(denoised_ct)
         return body_segmentation
 
-    def isolate_bs(self, body_segmentation: np.ndarray) -> tuple[np.ndarray,int,int]:
+    def isolate_bs(self, body_segmentation: np.ndarray) -> tuple[np.ndarray, int, int]:
         """
         Given a clean segmentation of the entire body, return
         integers of the BB and CC slices. BB being the slice inferior
@@ -48,7 +48,6 @@ class DifficultBodySegmentation:
         lungs_segmentation = self.__isolate_lungs(body_segmentation)
         bb, cc = self.__find_bb_and_cc(lungs_segmentation)
         return lungs_segmentation, bb, cc
-
 
     def __isolate_lungs(self, body_segmentation: np.ndarray) -> np.ndarray:
         """
@@ -67,7 +66,6 @@ class DifficultBodySegmentation:
         air = ~full_body
         body_and_background_segmentation = (body_segmentation > 0) | air
 
-
         # invert to get all air in the body, largest connected components should be the lungs
         inverted_img = np.logical_not(body_and_background_segmentation)
 
@@ -80,7 +78,6 @@ class DifficultBodySegmentation:
         labeled_img, num_features = label(inverted_img)
         sizes = np.bincount(labeled_img.ravel())
 
-
         sorted_cc = np.argsort(sizes)[::-1]
         # lungs should be the top 2 and 3. 1 is always the entire image
         lung_labels = sorted_cc[1:3]
@@ -88,9 +85,8 @@ class DifficultBodySegmentation:
         lung2 = (labeled_img == lung_labels[1]).astype(int)
         return (lung1 | lung2).astype(float)
 
-
-
-    def three_d_band(self, body_segmentation: np.ndarray, lungs_segmentation: np.ndarray, bb: int, cc: int) -> np.ndarray:
+    def three_d_band(self, body_segmentation: np.ndarray, lungs_segmentation: np.ndarray, bb: int,
+                     cc: int) -> np.ndarray:
         """
         Given a body segmentation return segmentation of area between the body and the convex hull of the lungs
         from bb to cc
@@ -124,9 +120,6 @@ class DifficultBodySegmentation:
         x = binary_opening(x, structuring_element, iterations=2)
         x = binary_closing(x, structuring_element)
         return x
-
-
-
 
     def __compute_largest_connected_component(self, denoised_ct):
         """
@@ -205,7 +198,8 @@ class MergedROI:
         NiftyHandler.write(lungs_segmentation, lungs_segmentation_path, orientation)
         body_lung_band = dss.three_d_band(body_segmentation, lungs_segmentation, bb, cc)
 
-        spine_segmentation = SpineSegmentation(ct_scan_path, anchor_segmentation_path, anchor_coordintes).getSpineSegmentation()
+        spine_segmentation = SpineSegmentation(ct_scan_path, anchor_segmentation_path,
+                                               anchor_coordintes).getSpineSegmentation()
         merged_segmentation = cls.__merge_band_and_spine(body_lung_band, spine_segmentation)
         merged_segmentation_path = os.path.join(output_dir, f"{scan_basename}_merged_segmentation.nii.gz")
         NiftyHandler.write(merged_segmentation, merged_segmentation_path, orientation)
@@ -230,7 +224,6 @@ class MergedROI:
         boxed_spine = MergedROI.draw_bounding_box_3d(sliced_spine)
         band_and_spine = ((band_3d > 0).astype(int) | (boxed_spine > 0).astype(int)).astype(float)
         return band_and_spine
-
 
     @staticmethod
     def draw_bounding_box_3d(binary_image: np.ndarray) -> np.ndarray:
@@ -258,16 +251,3 @@ class MergedROI:
         output_image += binary_image
 
         return output_image.astype(float)
-
-
-if __name__ == '__main__':
-    """
-    Update ct_scan_path, anchor_path and coordinates before running
-    """
-
-    for i in range(1, 5):
-        print(f"Working on scan {i}")
-        ct_scan_path = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_CT.nii.gz"
-        aorta_nifti = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_Aorta.nii.gz"
-        coordinates = (-80, 50, -70, 100)
-        MergedROI.merged_roi(ct_scan_path, aorta_nifti, coordinates)

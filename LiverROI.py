@@ -1,10 +1,8 @@
 from typing import Any
-
 import numpy as np
 from os.path import isdir, join
 from os import mkdir
 from NiftyHandler import NiftyHandler
-
 
 
 class LiverROI:
@@ -15,7 +13,7 @@ class LiverROI:
     IMIN = -100
     IMAX = 200
 
-    def __init__(self,  coordinates: tuple[int], output_file_name: str):
+    def __init__(self, coordinates: tuple[int], output_file_name: str):
         """
         Constructor
         coordinates: x_left, x_right, y_up, y_down, z_up, z_down coordinates for the roi
@@ -43,7 +41,6 @@ class LiverROI:
         -------
         """
 
-
         ct_data, ct_orientation = NiftyHandler.read(ct_scan_path)
         aorta_data, aorta_orientation = NiftyHandler.read(aorta_segmentation_path)
 
@@ -51,10 +48,11 @@ class LiverROI:
         estimated_liver_coord = self.__estimate_liver_midpoint(aorta_data)
 
         # use coordinates to get a rough estimate location ROI of the liver
-        liver_segmentation, liver_roi = self.__crop_liver_roi(ct_data, estimated_liver_coord)
+        liver_segmentation = self.__crop_liver_roi(ct_data, estimated_liver_coord)
 
         # threshold using IMIN and IMAX
-        liver_segmentation = ((LiverROI.IMAX >= liver_segmentation) & (liver_segmentation >= LiverROI.IMIN)).astype(float)
+        liver_segmentation = ((LiverROI.IMAX >= liver_segmentation) & (liver_segmentation >= LiverROI.IMIN)).astype(
+            float)
 
         liver_roi_path = join(self.output, f"liver_roi_{self.output_file_name}")
         NiftyHandler.write(liver_segmentation, liver_roi_path, ct_orientation)
@@ -71,18 +69,16 @@ class LiverROI:
 
         """
         aorta_axial_indices = np.nonzero(np.any(aorta_data, axis=(0, 1)))[0]
-        z_coord = aorta_axial_indices[len(aorta_axial_indices)//2] + z_translation
+        z_coord = aorta_axial_indices[len(aorta_axial_indices) // 2] + z_translation
         average_aorta_cord = np.average(np.where(aorta_data > 0), axis=1)
         x_coord = average_aorta_cord[0] + 150
         y_coord = average_aorta_cord[1]
 
         return x_coord, y_coord, z_coord
 
-
-
-    def __crop_liver_roi(self, ct_data, estimated_liver_middle_coordinates):
+    def __crop_liver_roi(self, ct_data, estimated_liver_middle_coordinates) -> np.ndarray:
         """
-        return cropped version of the ct scan
+        return segmented version of the ct scan
         relies on aorta_halfway coordinate for the z axis
         Parameters
         ----------
@@ -99,11 +95,8 @@ class LiverROI:
         z = int(z)
         x_left, x_right, y_in, y_out, z_up, z_down = self.coordinates
         liver_segmentation = np.zeros(ct_data.shape) - 1000
-        liver_segmentation[x+x_left:x+x_right, y+y_in:y+y_out, z+z_up: z+z_down] = 1
-        liver_crop = ct_data[x+x_left:x+x_right, y+y_in:y+y_out, z+z_up: z+z_down]
-        return liver_segmentation, liver_crop
-
-
+        liver_segmentation[x + x_left:x + x_right, y + y_in:y + y_out, z + z_up: z + z_down] = 1
+        return liver_segmentation
 
     def get_coordinates(self):
         """
@@ -113,16 +106,3 @@ class LiverROI:
 
         """
         return self.coordinates
-
-
-
-if __name__ == '__main__':
-
-    for i in range(1,5):
-        print(f"Working on scan {i}")
-        ct_scan_path = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_CT.nii.gz"
-        aorta_nifti = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_Aorta.nii.gz"
-        coordinates = (-25, 25, -30, 30, -10, 10)
-        liver_roi = LiverROI(coordinates, i)
-        roi = liver_roi.get_liver_roi(ct_scan_path, aorta_nifti)
-

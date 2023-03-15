@@ -8,6 +8,7 @@ class SpineSegmentation:
     """
     Class responsible for segmenting the spine from a CT scan
     """
+
     def __init__(self, ct_nifti: str, anchor_segmentation_nifti: str, anchor_coordinates: tuple[int]):
         """
         Constructor
@@ -39,7 +40,6 @@ class SpineSegmentation:
         clean_spine = self.__refine_spine(roi)
         return clean_spine
 
-
     def __spine_crop(self, skeleton_data: np.ndarray, anchor_data: np.ndarray):
         """
         Given the skeleton segmentation, use the anchor data and tuple to get a better ROI of only the spine itself.
@@ -62,7 +62,8 @@ class SpineSegmentation:
 
         x_left, x_right, y_up, y_down = self.anchor_coordinates
         spine_crop = np.zeros(skeleton_data.shape)
-        spine_crop[x+x_left: x+x_right, y+y_up:y+y_down, :] = skeleton_data[x+x_left: x+x_right, y+y_up:y+y_down, :]
+        spine_crop[x + x_left: x + x_right, y + y_up:y + y_down, :] = skeleton_data[x + x_left: x + x_right,
+                                                                      y + y_up:y + y_down, :]
         return spine_crop
 
     def __refine_spine(self, spine_data: np.ndarray) -> np.ndarray:
@@ -88,15 +89,7 @@ class SpineSegmentation:
         return (closed_holes > 0).astype(float)
 
 
-
-
-
-
-
-
-
 if __name__ == '__main__':
-
     i = 4
     ct_nifti = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_CT.nii.gz"
     aorta_nifti = f"/home/edan/Desktop/HighRad/Exercises/data/Targil1_data-20230227T131201Z-001/Targil1_data/Case{i}_Aorta.nii.gz"

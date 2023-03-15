@@ -1,6 +1,12 @@
+from typing import Tuple, Any
+
 import numpy as np
+from numpy import ndarray
+
 from NiftyHandler import NiftyHandler
-from scipy.ndimage import generate_binary_structure, binary_dilation, iterate_structure, binary_closing, binary_opening, label, binary_erosion
+from scipy.ndimage import generate_binary_structure, binary_dilation, iterate_structure, binary_closing, binary_opening, \
+    label, binary_erosion
+
 
 class MSRG:
     """
@@ -12,7 +18,9 @@ class MSRG:
         self.axial_boundary = axial_boundary
         self.__legal_methods = {"msrg", "msrg_roi"}
 
-    def run(self, ct_data: np.ndarray, roi: np.array, method: str = "msrg_roi", threshold: float = 20) -> np.ndarray:
+    def run(self, ct_data: np.ndarray, roi: np.array, method: str = "msrg_roi", threshold: float = 20,
+            iterations: int = 130) -> tuple[
+        ndarray, Any]:
         """
         Runs either one of the following methods:
         msrg:
@@ -47,7 +55,7 @@ class MSRG:
             seeds = self.__generate_seeds(roi)
             segmentation = self.__msrg(ct_data, seeds, threshold)
         elif method == "msrg_roi":
-            segmentation = self.__msrg_with_roi(ct_data, roi)
+            segmentation = self.__msrg_with_roi(ct_data, roi, threshold, iterations)
         else:
             raise ValueError(f"Trying to use illegal method type, legal method types are: {self.__legal_methods}")
 
@@ -57,9 +65,9 @@ class MSRG:
             bottom, top = self.axial_boundary
             temp_segmentation[:, :, bottom:top] = segmentation
             segmentation = temp_segmentation
-        return segmentation.astype(float)
-        refined_segmentation = self.__post_process(segmentation)
-        return refined_segmentation
+
+        refined_segmentation = self.post_process(segmentation)
+        return segmentation.astype(float), refined_segmentation.astype(float)
 
     def __generate_seeds(self, roi: np.ndarray) -> np.ndarray:
         """
@@ -75,7 +83,6 @@ class MSRG:
         segmentation_indices = np.argwhere(roi == 1)
         assert segmentation_indices.shape[0] >= self.seed_number
         return np.random.permutation(segmentation_indices)[:self.seed_number]
-
 
     def __msrg(self, ct_data: np.ndarray, seeds: np.ndarray, threshold: float) -> np.ndarray:
         """
@@ -139,7 +146,7 @@ class MSRG:
 
         return segmentation
 
-    def __msrg_with_roi(self, ct_scan: np.ndarray, roi: np.ndarray, threshold: float = 10, iterations: int = 125):
+    def __msrg_with_roi(self, ct_scan: np.ndarray, roi: np.ndarray, threshold: float = 10, iterations: int = 130):
         """
         Assuming the entire ROI is nearly contained within the confines of the liver
         1. preprocess the ROI a bit to get rid of outlier voxels
@@ -165,8 +172,6 @@ class MSRG:
         i = 0
         structure_element = generate_binary_structure(3, 2)
         while np.abs(prev_size - cur_size) > 100 and i < iterations:
-
-            print(f"Iteration #{i+1}")
             # get neighbors using dilation and bitwise xor
             prev_size = np.sum(segmentation)
             neighbors = np.bitwise_xor(segmentation, binary_dilation(segmentation, structure_element))
@@ -175,18 +180,12 @@ class MSRG:
             cur_average = np.mean(ct_scan[segmentation])
             neighbors_to_add = np.logical_and(neighbors, np.abs(ct_scan - cur_average) <= threshold)
             segmentation = np.logical_or(neighbors_to_add, segmentation)
-
-            # TODO check if binary closing is helpful here.
-            segmentation = binary_closing(segmentation, generate_binary_structure(3, 1))
             cur_size = np.sum(segmentation)
             i += 1
 
         return segmentation
 
-
-
-
-    def post_process(self, segmentation:np.ndarray) -> np.ndarray:
+    def post_process(self, segmentation: np.ndarray) -> np.ndarray:
         """
         Given a rough segmentation of the liver use morphological post processing to get a refined version
         Parameters
@@ -198,23 +197,24 @@ class MSRG:
 
         """
         # use binary closing and opening
+        small_element = generate_binary_structure(3, 1)
         structure_element = generate_binary_structure(3, 2)
         x = segmentation
-        x = binary_dilation(x, structure_element, iterations=10)
-        x = binary_closing(x, structure_element, iterations=10)
-        x = binary_erosion(x, structure_element, iterations=2)
-        # x = binary_opening(x, structure_element)
+        x = binary_closing(x, small_element, iterations=3)
+        x = binary_opening(x, structure_element, iterations=1)
 
         # find largest connected component and return it.
         x, num_components = label(x)
         x = x == np.argmax(np.bincount(x.flat)[1:]) + 1
         x = x.astype(float)
+
         return x
 
 
 def script_run():
     """
     enclosing method to run the script
+    can change refine to just run refine stage or entire msrg method.
     Returns
     -------
 
@@ -235,8 +235,9 @@ def script_run():
         roi_path = f"/home/edan/Desktop/HighRad/Exercises/ex3/liver_roi_output/liver_roi_1.nii.gz"
         ct_data, ct_orientation = NiftyHandler.read(ct_scan_path)
         roi_data, roi_orientation = NiftyHandler.read(roi_path)
-        final_segmentation = msrg.run(ct_data, roi_data)
-        NiftyHandler.write(final_segmentation, liver_segmentation_path, ct_orientation)
+        unrefined_segmentation, final_segmentation = msrg.run(ct_data, roi_data, threshold=10, iterations=110)
+        NiftyHandler.write(final_segmentation, refined_liver_segmentation_path, ct_orientation)
+        NiftyHandler.write(unrefined_segmentation, liver_segmentation_path, ct_orientation)
 
 
 if __name__ == '__main__':
