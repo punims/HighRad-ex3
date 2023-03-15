@@ -1,11 +1,11 @@
-from typing import Tuple, Any
+from typing import Any
 
 import numpy as np
 from numpy import ndarray
 
 from NiftyHandler import NiftyHandler
-from scipy.ndimage import generate_binary_structure, binary_dilation, iterate_structure, binary_closing, binary_opening, \
-    label, binary_erosion
+from scipy.ndimage import generate_binary_structure, binary_dilation, binary_closing, binary_opening, \
+    label
 
 
 class MSRG:
