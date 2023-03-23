@@ -223,13 +223,11 @@ class MSRG:
         middle = np.array(roi.shape) // 2
         for i in range(sample_size):
             voxel = None
-            while voxel is None or (binary_array[voxel[0], voxel[1], voxel[2]]) :
+            while voxel is None or binary_array[voxel[0], voxel[1], voxel[2]] or not roi_thresholded[voxel[0], voxel[1], voxel[2]]:
                 # Sample a voxel from the gaussian distribution
                 voxel = np.round(norm.rvs(size=3, loc=middle, scale=std)).astype(int)
                 # Make sure the voxel is within the bounds of the array
                 voxel = np.clip(voxel, 0, np.array(roi.shape) - 1)[: ,np.newaxis]
-                if not roi_thresholded[voxel[0], voxel[1], voxel[2]]:
-                    continue
 
             # Set the voxel to 1 in the binary array
             binary_array[voxel[0], voxel[1], voxel[2]] = True
