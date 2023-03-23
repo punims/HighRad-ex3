@@ -210,7 +210,6 @@ class MSRG:
         # Get the values between the bottom and top percentiles
         bottom_value = np.percentile(roi, bottom_percentile)
         top_value = np.percentile(roi, top_percentile)
-        values = roi[(roi >= bottom_value) & (roi <= top_value)]
         roi_thresholded = (roi >= bottom_value) & (roi <= top_value)
 
         # Create a binary array with the same shape as the input array
