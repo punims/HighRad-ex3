@@ -1,8 +1,7 @@
 from typing import Any
-
 import numpy as np
 from numpy import ndarray
-
+from scipy.stats import norm
 from NiftyHandler import NiftyHandler
 from scipy.ndimage import generate_binary_structure, binary_dilation, binary_closing, binary_opening, \
     label
@@ -163,8 +162,12 @@ class MSRG:
         """
         # refine the ROI
         roi = roi.astype(bool)
-        roi_average = np.mean(ct_scan[roi])
-        segmentation = np.logical_and(roi, np.abs(ct_scan - roi_average) <= threshold)
+        x_shape = np.max(np.sum(roi, axis=0))
+        y_shape = np.max(np.sum(roi, axis=1))
+        z_shape = np.max(np.sum(roi, axis=2))
+        segmentation = np.zeros(roi.shape)
+        segmentation[roi] = MSRG.sample_roi(ct_scan[roi].reshape(x_shape, y_shape, z_shape)).flatten()
+
 
         # Run MSRG with all seeds at once using dilation. Do so until convergence or after x iterations
         prev_size = np.sum(segmentation)
@@ -184,6 +187,52 @@ class MSRG:
             i += 1
 
         return segmentation
+
+    @staticmethod
+    def sample_roi(roi: np.ndarray, sample_size: int = 1000, bottom_percentile: int = 25, top_percentile: int = 75) -> np.ndarray:
+        """
+        Given an ROI cube from within the CT, sample it by taking 'sample_size' points with a gaussian distribution form the middle.
+        Only take values between the bottom and top percentiles.
+        Parameters
+        ----------
+        roi: CT scan in the ROI
+        sample_size: amount of voxels that should be a part of the end segmentation
+        bottom_percentile: bottom percentile of the distribution of values
+        top_percentile: top percentile of the distribution of values
+
+        Returns sampled ROI with the same shape as the original
+        -------
+
+        """
+
+        # Get the values between the bottom and top percentiles
+        bottom_value = np.percentile(roi, bottom_percentile)
+        top_value = np.percentile(roi, top_percentile)
+        values = roi[(roi >= bottom_value) & (roi <= top_value)]
+        roi_thresholded = (roi >= bottom_value) & (roi <= top_value)
+
+        # Calculate the mean and standard deviation of the values
+        std = np.std(values)
+
+        # Create a binary array with the same shape as the input array
+        binary_array = np.zeros(roi.shape, dtype=bool)
+
+        # Sample voxels from a gaussian distribution centered in the middle of the array
+        middle = np.array(roi.shape) // 2
+        for i in range(sample_size):
+            voxel = None
+            while voxel is None or (binary_array[voxel[0], voxel[1], voxel[2]]) :
+                # Sample a voxel from the gaussian distribution
+                voxel = np.round(norm.rvs(size=3, loc=middle, scale=std)).astype(int)
+                # Make sure the voxel is within the bounds of the array
+                voxel = np.clip(voxel, 0, np.array(roi.shape) - 1)[: ,np.newaxis]
+                if not roi_thresholded[voxel[0], voxel[1], voxel[2]]:
+                    continue
+
+            # Set the voxel to 1 in the binary array
+            binary_array[voxel[0], voxel[1], voxel[2]] = True
+
+        return binary_array
 
     def post_process(self, segmentation: np.ndarray) -> np.ndarray:
         """
@@ -224,7 +273,7 @@ def script_run():
     msrg = MSRG(seed_size, (125, 290))
     liver_segmentation_path = "liver_segmentation_1"
     refined_liver_segmentation_path = "liver_segmentation_1_refined"
-    refine = True
+    refine = False
 
     if refine:
         liver_segmentation_data, liver_orientation = NiftyHandler.read(liver_segmentation_path)
