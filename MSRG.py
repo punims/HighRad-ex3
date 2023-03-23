@@ -213,11 +213,10 @@ class MSRG:
         values = roi[(roi >= bottom_value) & (roi <= top_value)]
         roi_thresholded = (roi >= bottom_value) & (roi <= top_value)
 
-        # Calculate the mean and standard deviation of the values
-        std = np.std(values)
-
         # Create a binary array with the same shape as the input array
         binary_array = np.zeros(roi.shape, dtype=bool)
+        std = [np.std(list(range(binary_array.shape[0]))), np.std(list(range(binary_array.shape[1]))), np.std(list(range(binary_array.shape[2])))]
+
 
         # Sample voxels from a gaussian distribution centered in the middle of the array
         middle = np.array(roi.shape) // 2
