@@ -165,8 +165,10 @@ class MSRG:
         x_shape = np.max(np.sum(roi, axis=0))
         y_shape = np.max(np.sum(roi, axis=1))
         z_shape = np.max(np.sum(roi, axis=2))
+
         segmentation = np.zeros(roi.shape)
         segmentation[roi] = MSRG.sample_roi(ct_scan[roi].reshape(x_shape, y_shape, z_shape)).flatten()
+        segmentation = segmentation > 0
 
 
         # Run MSRG with all seeds at once using dilation. Do so until convergence or after x iterations
